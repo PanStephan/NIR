@@ -9,7 +9,7 @@ import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATASETS_DIR = ROOT_DIR / "datasets"
-OUTPUT_DIR = ROOT_DIR / "owasp_ml"
+OUTPUT_DIR = ROOT_DIR / "owasp_ml/prep"
 
 
 def _clean_loss_usd(value: str | float | int | None) -> float | np.nan:
@@ -75,6 +75,81 @@ def _choose_entity_type(values: Iterable[str | None]) -> str | None:
     return normalized[0]
 
 
+def _normalize_text_values(values: Iterable[str | None]) -> str:
+    parts: list[str] = []
+    for v in values:
+        if v is None:
+            continue
+        text = str(v).strip().lower()
+        if not text:
+            continue
+        parts.append(text)
+    return " ".join(parts)
+
+
+def _map_token_row_to_owasp_category(
+    entity_type: str | None,
+    risk_label: int | float | None,
+    risk_type: str | None,
+    root_cause: str | None,
+) -> str | None:
+    if risk_label in (0, 0.0):
+        return "none"
+    text = _normalize_text_values([risk_type, root_cause])
+    if not text:
+        return None
+    if (
+        "rug" in text
+        or "rugpull" in text
+        or "exit scam" in text
+        or "exit-scam" in text
+        or "pull" in text
+        or "liquidity" in text
+    ):
+        return "onchain_rugpull"
+    if "honeypot" in text:
+        return "honeypot"
+    if "phish" in text:
+        return "phishing"
+    if "ponzi" in text:
+        return "ponzi_scheme"
+    if "scam" in text or "fraud" in text:
+        return "generic_scam"
+    if (
+        "exploit" in text
+        or "reentrancy" in text
+        or "overflow" in text
+        or "underflow" in text
+        or "bug" in text
+        or "vulnerability" in text
+    ):
+        return "smart_contract_bug"
+    if entity_type == "wallet":
+        return "address_level_risk"
+    return "other_onchain_risk"
+
+
+def _map_tx_row_to_owasp_category(
+    label: int | float | None,
+    from_category: str | None,
+    to_category: str | None,
+) -> str | None:
+    if label in (0, 0.0):
+        return "none"
+    text = _normalize_text_values([from_category, to_category])
+    if not text:
+        return "other_onchain_risk"
+    if "phish" in text:
+        return "phishing"
+    if "scam" in text:
+        return "generic_scam"
+    if "mixer" in text or "tumbl" in text or "privacy" in text:
+        return "money_laundering"
+    if "dex" in text or "exchange" in text or "swap" in text:
+        return "dex_abuse"
+    return "other_onchain_risk"
+
+
 def _load_rugpull_sources() -> pd.DataFrame:
     paths = [
         DATASETS_DIR / "rugpull_full_dataset_new.csv",
@@ -84,7 +159,7 @@ def _load_rugpull_sources() -> pd.DataFrame:
     for path in paths:
         if not path.exists():
             continue
-        df = pd.read_csv(path)
+        df = pd.read_csv(path, low_memory=False)
         df = df.rename(
             columns={
                 "address": "address",
@@ -146,7 +221,7 @@ def _load_malicious_smart_contracts() -> pd.DataFrame:
                 "root_cause",
             ]
         )
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     df = df.rename(columns={"contract_address": "address"})
     df["address"] = df["address"].astype(str).str.lower()
     df["chain"] = "ETH"
@@ -283,6 +358,74 @@ def _load_eth_legit_addresses() -> pd.DataFrame:
     ]
 
 
+def _load_tools_ux_dataset() -> pd.DataFrame:
+    path = DATASETS_DIR / "tools_UX.csv"
+    if not path.exists():
+        return pd.DataFrame(
+            columns=[
+                "address",
+                "function_name",
+                "slither_pred",
+                "solhint_pred",
+                "mythril_pred",
+                "conkas_pred",
+                "smartcheck_pred",
+                "actual_label",
+            ]
+        )
+    df = pd.read_csv(path)
+    df = df.rename(
+        columns={
+            "Smart Contract": "address",
+            "Function Name": "function_name",
+        }
+    )
+    tool_columns = [
+        "slither",
+        "solhint",
+        "mythril",
+        "conkas",
+        "smartcheck",
+        "Actual",
+    ]
+    for col in tool_columns:
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = (
+            df[col]
+            .replace("N/A", np.nan)
+            .fillna(0)
+            .astype(int)
+        )
+    df = df.rename(
+        columns={
+            "slither": "slither_pred",
+            "solhint": "solhint_pred",
+            "mythril": "mythril_pred",
+            "conkas": "conkas_pred",
+            "smartcheck": "smartcheck_pred",
+            "Actual": "actual_label",
+        }
+    )
+    df["address"] = df["address"].astype(str).str.strip().str.lower()
+    df["function_name"] = df["function_name"].astype(str).str.strip()
+    df = df[df["function_name"] != ""]
+    df = df.dropna(subset=["actual_label"])
+    df = df.drop_duplicates()
+    return df[
+        [
+            "address",
+            "function_name",
+            "slither_pred",
+            "solhint_pred",
+            "mythril_pred",
+            "conkas_pred",
+            "smartcheck_pred",
+            "actual_label",
+        ]
+    ]
+
+
 def build_token_risk_dataset() -> pd.DataFrame:
     frames = [
         _load_rugpull_sources(),
@@ -309,6 +452,7 @@ def build_token_risk_dataset() -> pd.DataFrame:
                 "source",
                 "loss_usd",
                 "root_cause",
+                "owasp_category",
             ]
         )
     df = pd.concat(frames, ignore_index=True)
@@ -322,6 +466,15 @@ def build_token_risk_dataset() -> pd.DataFrame:
         loss_usd=("loss_usd", "max"),
         root_cause=("root_cause", _merge_semicolon),
     ).reset_index()
+    agg["owasp_category"] = [
+        _map_token_row_to_owasp_category(
+            entity_type=row["entity_type"],
+            risk_label=row["risk_label"],
+            risk_type=row["risk_type"],
+            root_cause=row["root_cause"],
+        )
+        for _, row in agg.iterrows()
+    ]
     return agg[
         [
             "address",
@@ -332,6 +485,7 @@ def build_token_risk_dataset() -> pd.DataFrame:
             "source",
             "loss_usd",
             "root_cause",
+            "owasp_category",
         ]
     ]
 
@@ -352,9 +506,13 @@ def build_tx_scam_dataset() -> pd.DataFrame:
                 "label",
                 "from_category",
                 "to_category",
+                "owasp_category",
             ]
         )
     df = pd.read_csv(path)
+    df["hash"] = df["hash"].astype(str).str.strip().str.lower()
+    df = df[df["hash"] != ""]
+    df = df.drop_duplicates(subset=["hash"])
     df["label"] = (
         df["from_scam"].fillna(0).astype(int)
         | df["to_scam"].fillna(0).astype(int)
@@ -368,9 +526,19 @@ def build_tx_scam_dataset() -> pd.DataFrame:
     result["gas_price"] = df["gas_price"]
     result["block_timestamp"] = df["block_timestamp"]
     result["block_number"] = df["block_number"]
+    result["from_address"] = result["from_address"].astype(str).str.strip().str.lower()
+    result["to_address"] = result["to_address"].astype(str).str.strip().str.lower()
     result["label"] = df["label"]
     result["from_category"] = df["from_category"]
     result["to_category"] = df["to_category"]
+    result["owasp_category"] = [
+        _map_tx_row_to_owasp_category(
+            label=row["label"],
+            from_category=row["from_category"],
+            to_category=row["to_category"],
+        )
+        for _, row in result.iterrows()
+    ]
     return result
 
 
@@ -385,14 +553,22 @@ def build_code_risk_dataset() -> pd.DataFrame:
                 "label_encoded",
                 "code_length_chars",
                 "code_length_lines",
+                "owasp_category",
             ]
         )
     df = pd.read_csv(path)
     if "filename" not in df.columns and df.columns[1] == "filename":
         df = df.iloc[:, 1:]
+    df["filename"] = df["filename"].astype(str)
     df["code"] = df["code"].astype(str)
+    df = df.dropna(subset=["code", "label"])
+    df["filename"] = df["filename"].str.strip()
+    df["code"] = df["code"].str.strip()
+    df = df[df["code"] != ""]
+    df = df.drop_duplicates(subset=["filename", "code", "label"])
     df["code_length_chars"] = df["code"].str.len()
     df["code_length_lines"] = df["code"].str.count("\n") + 1
+    df["owasp_category"] = df["label"].astype(str)
     return df[
         [
             "filename",
@@ -401,6 +577,7 @@ def build_code_risk_dataset() -> pd.DataFrame:
             "label_encoded",
             "code_length_chars",
             "code_length_lines",
+            "owasp_category",
         ]
     ]
 
@@ -410,9 +587,11 @@ def main() -> None:
     token_df = build_token_risk_dataset()
     tx_df = build_tx_scam_dataset()
     code_df = build_code_risk_dataset()
+    tools_ux_df = _load_tools_ux_dataset()
     token_df.to_csv(OUTPUT_DIR / "token_risk_dataset.csv", index=False)
     tx_df.to_csv(OUTPUT_DIR / "tx_scam_dataset.csv", index=False)
     code_df.to_csv(OUTPUT_DIR / "code_risk_dataset.csv", index=False)
+    tools_ux_df.to_csv(OUTPUT_DIR / "tools_ux_dataset.csv", index=False)
 
 
 if __name__ == "__main__":

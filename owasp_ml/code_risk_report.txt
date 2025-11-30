@@ -1,0 +1,54 @@
+=== Sanity-проверка code_risk_dataset ===
+Total samples: 2217
+Label counts:
+  /content/drive/My Drive/SC_Dataset/dangerous delegatecall (DE)/: 97 (0.0438)
+  /content/drive/My Drive/SC_Dataset/integer overflow (OF)/: 590 (0.2661)
+  /content/drive/My Drive/SC_Dataset/reentrancy (RE)/: 1218 (0.5494)
+  /content/drive/My Drive/SC_Dataset/timestamp dependency (TP)/: 312 (0.1407)
+Code length (chars) stats:
+  count: 2217.0
+  mean: 10477.526387009471
+  std: 11731.552297461767
+  min: 107.0
+  25%: 4432.0
+  50%: 6444.0
+  75%: 11474.0
+  max: 108950.0
+Примеры файлов по классам:
+  label=/content/drive/My Drive/SC_Dataset/dangerous delegatecall (DE)/: 5854.sol, 24277.sol, 11074.sol
+  label=/content/drive/My Drive/SC_Dataset/integer overflow (OF)/: 91.sol, 1448.sol, 1913.sol
+  label=/content/drive/My Drive/SC_Dataset/reentrancy (RE)/: 592.sol, 35467.sol, 22635.sol
+  label=/content/drive/My Drive/SC_Dataset/timestamp dependency (TP)/: 6454.sol, 7214.sol, 6255.sol
+
+=== Простая ML-проверка (TF-IDF char 3-5 + LogisticRegression, 80/20) ===
+Macro F1: 0.8717
+Macro ROC-AUC (OvR): 0.9929
+Classification report:
+                                                                 precision    recall  f1-score   support
+
+/content/drive/My Drive/SC_Dataset/dangerous delegatecall (DE)/     0.9231    0.6316    0.7500        19
+      /content/drive/My Drive/SC_Dataset/integer overflow (OF)/     0.9237    0.9237    0.9237       118
+            /content/drive/My Drive/SC_Dataset/reentrancy (RE)/     0.9490    0.9918    0.9699       244
+  /content/drive/My Drive/SC_Dataset/timestamp dependency (TP)/     0.8793    0.8095    0.8430        63
+
+                                                       accuracy                         0.9324       444
+                                                      macro avg     0.9188    0.8392    0.8717       444
+                                                   weighted avg     0.9313    0.9324    0.9302       444
+
+
+=== Stratified 5-fold CV (macro F1 / ROC-AUC) ===
+F1 macro: mean=0.8686, std=0.0284
+ROC-AUC macro: mean=0.9885, std=0.0035
+
+=== Качество по длине контракта (F1 macro по квантильным бинам) ===
+  q0_q25: F1 macro = 0.8449
+  q25_q50: F1 macro = 0.5571
+  q50_q75: F1 macro = 0.5772
+  q75_q100: F1 macro = 0.6068
+
+=== Оценка open-source инструментов по датасету tools_ux_dataset ===
+  slither: precision=0.8000, recall=0.8582, f1=0.8281
+  solhint: precision=0.9722, recall=0.3818, f1=0.5483
+  mythril: precision=1.0000, recall=0.3527, f1=0.5215
+  conkas: precision=1.0000, recall=0.4400, f1=0.6111
+  smartcheck: precision=0.9533, recall=0.3709, f1=0.5340

@@ -1,0 +1,64 @@
+=== Sanity-проверка tx_scam_dataset ===
+Total samples: 71239
+Label counts:
+  0: 57000 (0.8001)
+  1: 14239 (0.1999)
+OWASP category counts:
+  none: 57000 (0.8001)
+  generic_scam: 11133 (0.1563)
+  phishing: 3105 (0.0436)
+  other_onchain_risk: 1 (0.0000)
+Value stats:
+  count: 71239.0
+  mean: 1.002443995782194e+19
+  std: 2.8583746165703413e+20
+  min: 0.0
+  25%: 2.49e+16
+  50%: 2.48e+17
+  75%: 1.5e+18
+  max: 6e+22
+Gas stats:
+  count: 71239.0
+  mean: 68351.82169878858
+  std: 133569.2887889401
+  min: 21000.0
+  25%: 21000.0
+  50%: 35000.0
+  75%: 90000.0
+  max: 9344755.0
+Gas_price stats:
+  count: 71239.0
+  mean: 34492211621.1661
+  std: 125027190350.84796
+  min: 1.0
+  25%: 8000000001.0
+  50%: 20000000000.0
+  75%: 50609467870.0
+  max: 30000000000000.0
+Block_number stats:
+  count: 71239.0
+  mean: 5209499.8946504025
+  std: 750965.8239971848
+  min: 4370008.0
+  25%: 4900822.0
+  50%: 5066836.0
+  75%: 5285103.0
+  max: 9185954.0
+
+=== Простая ML-проверка (LogisticRegression по числовым фичам, 80/20) ===
+Macro F1: 0.7338
+ROC-AUC: 0.8651
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.8706    0.9712    0.9182     11400
+           1     0.7858    0.4224    0.5494      2848
+
+    accuracy                         0.8615     14248
+   macro avg     0.8282    0.6968    0.7338     14248
+weighted avg     0.8537    0.8615    0.8445     14248
+
+
+=== Stratified 5-fold CV (binary macro F1 / ROC-AUC) ===
+F1 macro: mean=0.7381, std=0.0066
+ROC-AUC: mean=0.8677, std=0.0040

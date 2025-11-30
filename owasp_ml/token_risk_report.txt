@@ -1,0 +1,45 @@
+=== Sanity-проверка token_risk_dataset ===
+Total samples: 24703
+Risk_label counts:
+  0: 13857 (0.5609)
+  1: 10846 (0.4391)
+OWASP category counts:
+  none: 13857 (0.5609)
+  phishing: 7273 (0.2944)
+  other_onchain_risk: 2647 (0.1072)
+  address_level_risk: 837 (0.0339)
+  smart_contract_bug: 89 (0.0036)
+Chain distribution:
+  ETH: 24615
+  BSC: 88
+Entity type distribution:
+  contract: 10605
+  wallet: 8420
+  token: 5678
+Loss_usd stats:
+  count: 105.0
+  mean: 1014569.4282857142
+  std: 3708276.2198071918
+  min: 60.0
+  25%: 82000.0
+  50%: 186299.0
+  75%: 440000.0
+  max: 31666317.0
+
+=== Простая ML-проверка (TF-IDF char 3-5 по risk_type + LogisticRegression, 80/20) ===
+Macro F1: 1.0000
+ROC-AUC: 1.0000
+Classification report:
+              precision    recall  f1-score   support
+
+           0     1.0000    1.0000    1.0000      2772
+           1     1.0000    1.0000    1.0000      2169
+
+    accuracy                         1.0000      4941
+   macro avg     1.0000    1.0000    1.0000      4941
+weighted avg     1.0000    1.0000    1.0000      4941
+
+
+=== Stratified 5-fold CV (binary macro F1 / ROC-AUC) ===
+F1 macro: mean=1.0000, std=0.0000
+ROC-AUC: mean=1.0000, std=0.0000
